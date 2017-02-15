@@ -6,6 +6,7 @@ import (
 	"log"
 	"runtime"
 	"sort"
+	"sync"
 	"time"
 )
 
@@ -20,11 +21,13 @@ type Cron struct {
 	running  bool
 	ErrorLog *log.Logger
 	location *time.Location
+	mu       sync.Mutex
 }
 
 // Job is an interface for submitted cron jobs.
 type Job interface {
 	Run()
+	UUID() string
 }
 
 // The Schedule describes a job's duty cycle.
@@ -91,7 +94,8 @@ func NewWithLocation(location *time.Location) *Cron {
 // A wrapper that turns a func() into a cron.Job
 type FuncJob func()
 
-func (f FuncJob) Run() { f() }
+func (f FuncJob) Run()         { f() }
+func (f FuncJob) UUID() string { return "taskUUID" }
 
 // AddFunc adds a func to the Cron to be run on the given schedule.
 func (c *Cron) AddFunc(spec string, cmd func()) error {
@@ -100,12 +104,30 @@ func (c *Cron) AddFunc(spec string, cmd func()) error {
 
 // AddJob adds a Job to the Cron to be run on the given schedule.
 func (c *Cron) AddJob(spec string, cmd Job) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
 	schedule, err := Parse(spec)
 	if err != nil {
 		return err
 	}
 	c.Schedule(schedule, cmd)
 	return nil
+}
+
+func (c *Cron) RemoveJob(id string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	for i, e := range c.entries {
+		if e.Job.UUID() == id {
+			c.entries = append(c.entries[:i], c.entries[i+1:]...)
+
+			// Only remove first entry.
+			// So you must keep the return of UUID() is uinque
+			break
+		}
+	}
 }
 
 // Schedule adds a Job to the Cron to be run on the given schedule.
@@ -196,8 +218,10 @@ func (c *Cron) run() {
 			continue
 
 		case newEntry := <-c.add:
+			c.mu.Lock()
 			c.entries = append(c.entries, newEntry)
 			newEntry.Next = newEntry.Schedule.Next(time.Now().In(c.location))
+			c.mu.Unlock()
 
 		case <-c.snapshot:
 			c.snapshot <- c.entrySnapshot()

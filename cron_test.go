@@ -30,6 +30,10 @@ func (d DummyJob) Run() {
 	panic("YOLO")
 }
 
+func (d DummyJob) UUID() string {
+	return "DummyJob"
+}
+
 func TestJobPanicRecovery(t *testing.T) {
 	var job DummyJob
 
@@ -278,6 +282,10 @@ type testJob struct {
 
 func (t testJob) Run() {
 	t.wg.Done()
+}
+
+func (t testJob) UUID() string {
+	return "testJob"
 }
 
 // Simple test using Runnables.
