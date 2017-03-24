@@ -104,9 +104,6 @@ func (c *Cron) AddFunc(spec string, cmd func()) error {
 
 // AddJob adds a Job to the Cron to be run on the given schedule.
 func (c *Cron) AddJob(spec string, cmd Job) error {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
 	schedule, err := Parse(spec)
 	if err != nil {
 		return err
